@@ -83,19 +83,61 @@ backup_and_link() {
   ln -sf "$src" "$dst"
 }
 
-link_dotfiles() {
-  msg "Linking dotfiles"
-  local repo_root script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  repo_root="$(cd "$script_dir" && pwd)"
+#link_dotfiles() {
+#  msg "Linking dotfiles"
+#  local repo_root script_dir
+#  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+#  repo_root="$(cd "$script_dir" && pwd)"
 
+#  shopt -s dotglob
+#  for f in "$repo_root/dotfiles/"*; do
+#    dst="$HOME/$(basename "$f")"
+#    [[ -d $f && $(basename "$f") == ".config" ]] && {
+#      mkdir -p "$HOME/.config"
+#      rsync -a --delete "$f/" "$HOME/.config/$(basename "$f")/"
+#    } || backup_and_link "$f" "$dst"
+#  done
+#  shopt -u dotglob
+#}
+
+
+patch_zshrc() {
+  local repo_root=$1
+  local rc="$HOME/.zshrc"
+  local start="# >>> dotfiles include START >>>"
+  local end="# <<< dotfiles include END   <<<"
+
+  # make sure the file exists
+  [[ -f $rc ]] || touch "$rc"
+
+  if grep -qF "$start" "$rc"; then
+    msg ".zshrc already includes dotfiles block"
+    return
+  fi
+
+  msg "Patching .zshrc to source repo’s config"
+  {
+    printf "\n%s\n" "$start"
+    echo "export DOTFILES_DIR=\"$repo_root\""
+    echo '[ -f "$DOTFILES_DIR/dotfiles/.zshrc" ] && source "$DOTFILES_DIR/dotfiles/.zshrc"'
+    printf "%s\n" "$end"
+  } >> "$rc"
+}
+
+link_other_dotfiles() {
+  local repo_root=$1
+  msg "Linking dotfiles (except .zshrc)"
   shopt -s dotglob
   for f in "$repo_root/dotfiles/"*; do
+    [[ $(basename "$f") == ".zshrc" ]] && continue   # skip
     dst="$HOME/$(basename "$f")"
-    [[ -d $f && $(basename "$f") == ".config" ]] && {
+    # recurse .config exactly as before
+    if [[ -d $f && $(basename "$f") == ".config" ]]; then
       mkdir -p "$HOME/.config"
       rsync -a --delete "$f/" "$HOME/.config/$(basename "$f")/"
-    } || backup_and_link "$f" "$dst"
+    else
+      backup_and_link "$f" "$dst"
+    fi
   done
   shopt -u dotglob
 }
@@ -109,6 +151,15 @@ main() {
   install_tmux
   install_colorls
   link_dotfiles
+
+  # repo root = folder containing this script
+  local repo_root; repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  patch_zshrc "$repo_root"         # <-- new behaviour
+  link_other_dotfiles "$repo_root" # link the rest
+
+  msg "Done!  Start a new zsh or log out/in to load the changes."
+
   msg "Done!  Log out & back in (or chsh -s $(which zsh)) then run: p10k configure"
 }
 
