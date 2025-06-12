@@ -6,6 +6,13 @@ plugins=( git zsh-syntax-highlighting zsh-autosuggestions encode64 tmux urltools
 
 source $ZSH/oh-my-zsh.sh
 
+# --- Ruby user-gems ----------------------------------------------------------
+if command -v ruby >/dev/null 2>&1; then
+  local _gem_bin; _gem_bin="$(ruby -e 'require "rbconfig,gems"; print File.join(Gem.user_dir, "bin")')"
+  [[ ":$PATH:" != *":$_gem_bin:"* ]] && export PATH="$_gem_bin:$PATH"
+fi
+# ---------------------------------------------------------------------------
+
 # --- colourised LS via colorls ---------------------------------------------
 if command -v colorls &>/dev/null; then
     alias ld='colorls -d'
